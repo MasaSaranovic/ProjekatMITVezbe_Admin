@@ -1,16 +1,19 @@
 import 'dart:io';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:skriptarnica_admin/consts/app_colors.dart';
 import 'package:skriptarnica_admin/consts/app_constants.dart';
 import 'package:skriptarnica_admin/consts/validator.dart';
 import 'package:skriptarnica_admin/models/product_model.dart';
+import 'package:skriptarnica_admin/services/cloudinary_service.dart';
 import 'package:skriptarnica_admin/services/my_app_functions.dart';
 import 'package:skriptarnica_admin/widgets/subtitle_text.dart';
 import 'package:skriptarnica_admin/widgets/title_text.dart';
+import 'package:uuid/uuid.dart';
 
 class EditOrUploadProductScreen extends StatefulWidget {
   static const routeName = '/EditOrUploadProductScreen';
@@ -32,6 +35,8 @@ class _EditOrUploadProductScreenState extends State<EditOrUploadProductScreen> {
   String? _categoryValue;
   bool isEditing = false;
   String? productNetworkImage;
+  String productImageUrl = "";
+
   @override
   void initState() {
     if (widget.productModel != null) {
@@ -76,18 +81,73 @@ class _EditOrUploadProductScreenState extends State<EditOrUploadProductScreen> {
   }
 
   Future<void> _uploadProduct() async {
-    if (_pickedImage == null) {
-      MyAppFunctions.showErrorOrWarningDialog(
-        context: context,
-        subtitle: "Please pick up an image",
-        fct: () {},
-      );
-
-      return;
-    }
     final isValid = _formKey.currentState!.validate();
     FocusScope.of(context).unfocus();
-    if (isValid) {}
+    if (_pickedImage == null) {
+      MyAppFunctions.showErrorOrWarningDialog(
+          context: context,
+          subtitle: "Make sure to pick up an image",
+          fct: () {});
+      return;
+    }
+    if (isValid) {
+      try {
+        setState(() {});
+
+        /*
+        Za Firebase Storage
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child("productsImages")
+            .child("${_titleController.text}.jpg");
+        await ref.putFile(File(_pickedImage!.path));
+        productImageUrl = await ref.getDownloadURL();*/
+
+        productImageUrl =
+            await CloudinaryService.uploadImage(File(_pickedImage!.path));
+
+        final productId = const Uuid().v4();
+        await FirebaseFirestore.instance
+            .collection("products")
+            .doc(productId)
+            .set({
+          'productId': productId,
+          'productTitle': _titleController.text,
+          'productPrice': _priceController.text,
+          'productImage': productImageUrl,
+          'productCategory': _categoryValue,
+          'productDescription': _descriptionController.text,
+          'productQuantity': _quantityController.text,
+          'createdAt': Timestamp.now(),
+        });
+        Fluttertoast.showToast(
+          msg: "Product has been added",
+          textColor: Colors.white,
+        );
+        if (!mounted) return;
+        MyAppFunctions.showErrorOrWarningDialog(
+            isError: false,
+            context: context,
+            subtitle: "Clear Form?",
+            fct: () {
+              clearForm();
+            });
+      } on FirebaseException catch (error) {
+        await MyAppFunctions.showErrorOrWarningDialog(
+          context: context,
+          subtitle: error.message.toString(),
+          fct: () {},
+        );
+      } catch (error) {
+        await MyAppFunctions.showErrorOrWarningDialog(
+          context: context,
+          subtitle: error.toString(),
+          fct: () {},
+        );
+      } finally {
+        setState(() {});
+      }
+    }
   }
 
   Future<void> _editProduct() async {
@@ -96,12 +156,65 @@ class _EditOrUploadProductScreenState extends State<EditOrUploadProductScreen> {
     if (_pickedImage == null && productNetworkImage == null) {
       MyAppFunctions.showErrorOrWarningDialog(
         context: context,
-        subtitle: "Please pick up an image",
+        subtitle: "Make sure to pick up an image",
         fct: () {},
       );
       return;
     }
-    if (isValid) {}
+    if (isValid) {
+      try {
+        setState(() {});
+
+        if (_pickedImage != null) {
+          productImageUrl =
+              await CloudinaryService.uploadImage(File(_pickedImage!.path));
+        }
+
+        final imageToSave = productImageUrl.isNotEmpty
+            ? productImageUrl
+            : (productNetworkImage ?? "");
+
+        await FirebaseFirestore.instance
+            .collection("products")
+            .doc(widget.productModel!.productId)
+            .update({
+          'productId': widget.productModel!.productId,
+          'productTitle': _titleController.text,
+          'productPrice': _priceController.text,
+          'productImage': imageToSave,
+          'productCategory': _categoryValue,
+          'productDescription': _descriptionController.text,
+          'productQuantity': _quantityController.text,
+          'createdAt': widget.productModel!.createdAt,
+        });
+        Fluttertoast.showToast(
+          msg: "Product has been edited",
+          textColor: Colors.white,
+        );
+        if (!mounted) return;
+        MyAppFunctions.showErrorOrWarningDialog(
+            isError: false,
+            context: context,
+            subtitle: "Clear Form?",
+            fct: () {
+              clearForm();
+            });
+      } on FirebaseException catch (error) {
+        await MyAppFunctions.showErrorOrWarningDialog(
+          context: context,
+          subtitle: error.message.toString(),
+          fct: () {},
+        );
+      } catch (error) {
+        await MyAppFunctions.showErrorOrWarningDialog(
+          context: context,
+          subtitle: error.toString(),
+          fct: () {},
+        );
+      } finally {
+        setState(() {});
+      }
+    }
   }
 
   Future<void> localImagePicker() async {
@@ -110,11 +223,15 @@ class _EditOrUploadProductScreenState extends State<EditOrUploadProductScreen> {
       context: context,
       cameraFCT: () async {
         _pickedImage = await picker.pickImage(source: ImageSource.camera);
-        setState(() {});
+        setState(() {
+          productNetworkImage = null;
+        });
       },
       galleryFCT: () async {
         _pickedImage = await picker.pickImage(source: ImageSource.gallery);
-        setState(() {});
+        setState(() {
+          productNetworkImage = null;
+        });
       },
       removeFCT: () {
         setState(() {

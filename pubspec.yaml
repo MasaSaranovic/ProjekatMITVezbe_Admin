@@ -30,6 +30,13 @@ dependencies:
   dotted_border: ^2.1.0
   # Utils
   uuid: ^3.0.7
+  #Firebase
+  firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
+  cloud_firestore: ^6.1.2
+  firebase_storage: ^13.0.6
+  #Cloudinary
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

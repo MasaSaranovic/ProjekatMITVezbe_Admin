@@ -53,9 +53,21 @@ class _SearchScreenState extends State<SearchScreen> {
           // ),
           title: TitlesTextWidget(label: passedCategory ?? "Search products"),
         ),
-        body: productList.isEmpty
-            ? const Center(child: TitlesTextWidget(label: "No product found"))
-            : Padding(
+        body: StreamBuilder<List<ProductModel>>(
+            stream: productsProvider.fetchProductsStream(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const MaterialApp(
+                  debugShowCheckedModeBanner: false,
+                  home: Center(child: CircularProgressIndicator()),
+                );
+              } else if (snapshot.hasError) {
+                return Center(child: SelectableText(snapshot.error.toString()));
+              } else if (snapshot.data == null) {
+                return const Center(
+                    child: SelectableText("No products has been added"));
+              }
+              return Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Column(
                   children: [
@@ -69,10 +81,10 @@ class _SearchScreenState extends State<SearchScreen> {
                         prefixIcon: const Icon(Icons.search),
                         suffixIcon: GestureDetector(
                           onTap: () {
-                            // setState(() {
+                            //setState(() {
                             FocusScope.of(context).unfocus();
                             searchTextController.clear();
-                            // });
+                            //});
                           },
                           child: const Icon(
                             Icons.clear,
@@ -80,12 +92,13 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                         ),
                       ),
-                      // onChanged: (value) {
-                      //   setState(() {
-                      //     productListSearch = productsProvider.searchQuery(
-                      //         searchText: searchTextController.text);
-                      //   });
-                      // },
+                      onChanged: (value) {
+                        setState(() {
+                          productListSearch = productsProvider.searchQuery(
+                              searchText: searchTextController.text,
+                              passedList: productList);
+                        });
+                      },
                       onSubmitted: (value) {
                         setState(() {
                           productListSearch = productsProvider.searchQuery(
@@ -113,16 +126,16 @@ class _SearchScreenState extends State<SearchScreen> {
                         crossAxisSpacing: 12,
                         builder: (context, index) {
                           return ProductWidget(
-                            productId: searchTextController.text.isNotEmpty
-                                ? productListSearch[index].productId
-                                : productList[index].productId,
-                          );
+                              productId: searchTextController.text.isNotEmpty
+                                  ? productListSearch[index].productId
+                                  : productList[index].productId);
                         },
                       ),
                     ),
                   ],
                 ),
-              ),
+              );
+            }),
       ),
     );
   }
